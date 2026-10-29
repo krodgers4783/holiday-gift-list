@@ -117,6 +117,8 @@ li.got .gtext{text-decoration:line-through;text-decoration-thickness:2px;color:v
 .btn{font:inherit;font-weight:800;font-size:15px;border:0;border-radius:10px;padding:9px 14px;cursor:pointer;background:#ffffff;color:var(--cbg)}
 .btn.ghost{background:transparent;color:#fff;border:2px solid var(--on-card-line)}
 .btn.warn{background:var(--sun);color:var(--sun-ink)}
+.links{display:flex;justify-content:flex-end;gap:16px;flex-wrap:wrap}
+.sw-n{font-size:12px;opacity:.75;font-variant-numeric:tabular-nums}
 .rm{align-self:flex-end;font-size:13px;font-weight:700;color:var(--on-card-soft);background:none;border:0;cursor:pointer;padding:2px 0;text-decoration:underline}
 .addp{display:flex;gap:8px;background:var(--paper);border-radius:16px;box-shadow:var(--shadow);padding:12px}
 .addp input{flex:1;min-width:0;font:inherit;font-size:16px;padding:9px 12px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
@@ -329,8 +331,11 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
   const $ = id => document.getElementById(id);
   const uid = () => Math.random().toString(36).slice(2,10);
   const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  state.people.forEach(p => { if(!p.holiday) p.holiday = state.holiday; });
+  const list = (h = state.holiday) => state.people.filter(p => p.holiday === h);
   const isDone = p => p.gifts.length > 0 && p.gifts.every(g => g.done);
-  const allDone = () => state.people.length > 0 && state.people.every(isDone);
+  const allDone = () => { const l = list(); return l.length > 0 && l.every(isDone); };
+  const HNAME = {christmas:"Christmas", hanukkah:"Hanukkah"};
   const find = id => state.people.find(p => p.id === id);
   const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} };
   const hk = () => state.holiday === "hanukkah";
@@ -371,10 +376,14 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
     $("kicker").textContent = hk() ? "Hanukkah shopping" : "Christmas shopping";
     $("btnXmas").setAttribute("aria-pressed", !hk());
     $("btnHk").setAttribute("aria-pressed", hk());
-    const gifts = state.people.flatMap(p => p.gifts);
+    [["btnXmas","christmas"],["btnHk","hanukkah"]].forEach(([id,h]) => {
+      const l = list(h), d = l.filter(isDone).length;
+      $(id).innerHTML = HNAME[h] + (l.length ? ` <span class="sw-n">${d}/${l.length}</span>` : "");
+    });
+    const gifts = list().flatMap(p => p.gifts);
     const got = gifts.filter(g => g.done).length;
     const pct = gifts.length ? Math.round(got/gifts.length*100) : 0;
-    const total = state.people.length, done = state.people.filter(isDone).length, left = total - done;
+    const total = list().length, done = list().filter(isDone).length, left = total - done;
     $("pct").textContent = pct + "%";
     $("pgifts").textContent = `${got} of ${gifts.length} gift${gifts.length===1?"":"s"} bought`;
     $("ppeople").textContent = `${done} of ${total} ${total===1?"person":"people"} done`;
@@ -415,7 +424,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
       </li>`).join("") : `<li class="empty">No gift ideas yet.</li>`;
     const rm = confirmRemove.has(p.id)
       ? `<div class="add" style="justify-content:flex-end"><button class="btn ghost" data-act="cancelrm" data-p="${p.id}">Keep</button><button class="btn warn" data-act="rmperson" data-p="${p.id}">Remove ${esc(p.name)}</button></div>`
-      : `<button class="rm" data-act="askrm" data-p="${p.id}">Remove ${esc(p.name)}</button>`;
+      : `<div class="links"><button class="rm" data-act="move" data-p="${p.id}">Move to ${HNAME[p.holiday==="hanukkah"?"christmas":"hanukkah"]}</button><button class="rm" data-act="askrm" data-p="${p.id}">Remove ${esc(p.name)}</button></div>`;
     return `<article class="card ${done?"done":""}">
       <div class="chead"><span class="cname">${esc(p.name)}</span><span class="count">${got}/${p.gifts.length}</span>${done?`<span class="pill">Done</span>`:""}</div>
       <ul>${items}</ul>
@@ -427,7 +436,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
     </article>`;
   }
   function section(group, title, ph){
-    const ps = state.people.filter(p => (p.group||"family") === group);
+    const ps = list().filter(p => (p.group||"family") === group);
     return `<section class="section"><h2>${title}</h2>
       ${ps.length ? `<div class="grid">${ps.map(card).join("")}</div>` : ""}
       <form class="addp" data-group="${group}"><input id="addp-${group}" type="text" placeholder="${ph}" aria-label="${ph}" autocomplete="off" enterkeyhint="done"><button class="btn" type="submit">Add</button></form>
@@ -438,11 +447,11 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
     const drafts = {}; document.querySelectorAll("#lists input").forEach(i => drafts[i.id] = i.value);
     const focused = document.activeElement && document.activeElement.id;
     let html = "";
-    if(!state.people.length) html += `<div class="intro"><b>Start here:</b> add the people you shop for under Family and Friends, then add gift ideas on each card. Check gifts off as you buy them.</div>`;
+    if(!list().length) html += `<div class="intro"><b>Your ${HNAME[state.holiday]} list is empty.</b> Add the people you shop for under Family and Friends, then add gift ideas on each card. Celebrate both? Keep a separate list for each holiday and use the switch at the top to flip between them.</div>`;
     html += section("family","Family","Add a family member");
     html += section("friends","Friends","Add a friend");
-    if(state.people.length) html += `<section class="reset">
-      <div>Done for the year? Start next year's list: "Every year" gifts stay and get unchecked, one-time gifts are cleared.</div>
+    if(list().length) html += `<section class="reset">
+      <div>Done for the year? Start next year's ${HNAME[state.holiday]} list: "Every year" gifts stay and get unchecked, one-time gifts are cleared. Your other holiday's list isn't touched.</div>
       ${confirmReset ? `<div class="row"><button class="btn" data-act="doreset">Yes, start next year</button><button class="btn ghost" data-act="cancelreset">Cancel</button></div>`
                      : `<button class="btn ghost" data-act="askreset">Start next year's list</button>`}
     </section>`;
@@ -494,20 +503,24 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
     } else if(act === "annual" && p){
       const g = p.gifts.find(x => x.id === b.dataset.g); if(g){ g.annual = !g.annual; save(); render(); }
     } else if(act === "delgift" && p){ p.gifts = p.gifts.filter(x => x.id !== b.dataset.g); save(); render(); }
+    else if(act === "move" && p){
+      p.holiday = p.holiday === "hanukkah" ? "christmas" : "hanukkah"; save(); render();
+      toast(`${p.name} moved to your ${HNAME[p.holiday]} list.`);
+    }
     else if(act === "askrm"){ confirmRemove.add(b.dataset.p); render(); }
     else if(act === "cancelrm"){ confirmRemove.delete(b.dataset.p); render(); }
     else if(act === "rmperson"){ state.people = state.people.filter(x => x.id !== b.dataset.p); confirmRemove.delete(b.dataset.p); save(); render(); }
     else if(act === "askreset"){ confirmReset = true; render(); }
     else if(act === "cancelreset"){ confirmReset = false; render(); }
     else if(act === "doreset"){
-      state.people.forEach(pp => { pp.gifts = pp.gifts.filter(g => g.annual).map(g => ({...g, done:false})); });
+      list().forEach(pp => { pp.gifts = pp.gifts.filter(g => g.annual).map(g => ({...g, done:false})); });
       confirmReset = false; save(); render(); toast("Fresh list for next year.");
     }
   });
   document.addEventListener("submit", e => {
     e.preventDefault();
     const f = e.target, input = f.querySelector("input"), text = input.value.trim(); if(!text) return;
-    if(f.dataset.group) state.people.push({id:uid(), name:text, group:f.dataset.group, gifts:[]});
+    if(f.dataset.group) state.people.push({id:uid(), name:text, group:f.dataset.group, holiday:state.holiday, gifts:[]});
     else { const p = find(f.dataset.p); if(!p) return; p.gifts.push({id:uid(), text, done:false, annual:false}); }
     input.value = ""; save(); render();
     const again = $(f.dataset.group ? "addp-"+f.dataset.group : "add-"+f.dataset.p); if(again) again.focus();
